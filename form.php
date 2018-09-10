@@ -2,10 +2,20 @@
 include('includes/config.php');
 error_reporting(0);
 $clientArr = $commonobj->arrayColumn($commonobj->getQry("SELECT distinct client from master_alcon_table where month = '$month' and client<>'' order by client asc"),'','client');
-if(isset($_POST['title'])){
+if(isset($_POST['activity_date_time'])){
 	extract($_POST);
+	if($activity == 'L2 Connect' || $activity == 'TL/Manager connect' || $activity == 'Team Meeting'){
+		if ($activity == 'L2 Connect') {
+			$Qry = " and role='L2'";
+		} else if ($activity == 'TL/Manager connect') {
+			$Qry = " and role='TL'";
+		}
+		$enggArr = $commonobj->arrayColumn($commonobj->getQry("SELECT distinct emp_name from master_alcon_table where team = '$team' and month='$month' $Qry order by emp_name asc") , '', 'emp_name');
+		$absentArr = array_diff($enggArr,$pr_engg);
+	}	
+
 	$cr_date       = date("d-M-y", strtotime($activity_date_time));
-	$date       = date("Y-m-d H:i:s", strtotime($activity_date_time));
+	$date       = date("Y-m-d", strtotime($activity_date_time));
     $cr_addyear    = date("Y", strtotime($activity_date_time));
     $cr_month      = date("M", strtotime($activity_date_time));
     if($cr_month=='Jan' || $cr_month=='Feb' || $cr_month=='Mar'){
@@ -19,30 +29,39 @@ if(isset($_POST['title'])){
     }
     $cr_month       = date("M", strtotime($cr_date))." ".$cr_addyear;
     $cr_week        ="Wk " . date("W", strtotime($cr_date))." ".$cr_addyear;
-	if($activity != 'RAG' && $activity != 'Events/Fun activity'){
-		$insertQry = $conn->prepare("INSERT INTO `hr_task`(`activity_title`, `activity_date_time`, `activity_type`, `client`, `team`, `present_engg`, `absent_engg`, `category`, `f_week`, `f_month`, `f_qtr`, `created_by`, `create_at`, `update_at`) VALUES ( ?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-		$absentname= count($ab_engg) > 0 ? implode(',',$ab_engg) :'';
-		 $presentname = count($pr_engg) > 0 ? implode(',',$pr_engg): '';
-		$insertstatus = $insertQry->execute(array($title , $date , $activity , $client , $team , $presentname ,$absentname,$issue , $cr_week ,  $cr_month , $cr_qtr , $username , $dbdatetime , $dbdatetime ));
+	
+		$insertQry = $conn->prepare("INSERT INTO `hr_task`(`activity_date_time`, `activity_type`, `client`, `team`, `present_engg`, `absent_engg`, `category`, `f_week`, `f_month`, `f_qtr`, `created_by`, `create_at`, `update_at`) VALUES ( ?,?,?,?,?,?,?,?,?,?,?,?,?)");
+		$absentname= count($absentArr) > 0 ? implode(',',$absentArr) :'';
+		$presentname = count($pr_engg) > 0 ? implode(',',$pr_engg): '';
+		$insertstatus = $insertQry->execute(array( $date , $activity , $client , $team , $presentname ,$absentname,implode(',',$issue), $cr_week ,  $cr_month , $cr_qtr , $username , $dbdatetime , $dbdatetime ));
+			
 		$taskID = $conn->lastInsertId();
-		for ($i=1; $i <= $_POST['hidden_id'] ; $i++) { 
-			$title = $_POST["ID".$i."_title"];
-			$start_date = date('Y-m-d',strtotime($_POST["ID".$i."_start_date"]));
-			$end_time = date('Y-m-d',strtotime($_POST["ID".$i."_end_date"]));
-			$status = $_POST["ID".$i."_status"];
-			$cmd = $_POST["ID".$i."_comments"];
-			$taskActivity = $conn->prepare("INSERT INTO `hr_task_activity`(`task_id`, `task_title`, `start_date`, `end_date`, `status`, `task_cmd`, `create_at`, `update_at`) VALUES ( ?,?,?,?,?,?,?,?)");
-			$taskstatus = $taskActivity->execute(array($taskID , $title , $start_date , $end_time , $status , $cmd , $dbdatetime , $dbdatetime ));
-		}
-	}else{
 		
-	}
-
-	if($insertstatus){
-		echo "hi";
-		//header('location:form.php?msg=1');
-		exit;
-	}
+		if($activity != 'RAG' || $activity != 'Events/Fun activity'){
+			for ($i=1; $i <= $_POST['hidden_id'] ; $i++) { 
+				$title = $_POST["ID".$i."_title"];
+				$start_date = date('Y-m-d',strtotime($_POST["ID".$i."_start_date"]));
+				$end_time = date('Y-m-d',strtotime($_POST["ID".$i."_end_date"]));
+				$status = $_POST["ID".$i."_status"];
+				$cmd = $_POST["ID".$i."_comments"];
+				$taskActivity = $conn->prepare("INSERT INTO `hr_task_activity`(`task_id`,`create_by`,`create_at`) VALUES (?,?,?)");
+				$taskstatus = $taskActivity->execute(array($taskID , $username,$dbdatetime));
+				$activity_ID = $conn->lastInsertId();
+				$insertcommts = $conn->prepare("INSERT INTO `hr_task_activity_comments`(`task_id`,`activity_id`, `activity_title`, `start_date`, `end_date`, `comments`, `status`,`create_by`, `created_at`) VALUES (?,?,?,?,?,?,?,?,?)");
+				$insertcommts->execute(array($taskID,$activity_ID , $title ,$start_date , $end_time , $cmd , $status,$username , $dbdatetime ));
+			}
+		}
+		if($activity == 'RAG'){
+			$raginsert = $conn->prepare("UPDATE master_alcon_table set `rag_status` = '$rag', `created_by`='$username',`create_at`='$dbdatetime',`update_at`='$dbdatetime' where month='$month' and emp_name in ('".implode("','",$pr_engg)."')");
+			$raginsert->execute();
+		}
+	// if($insertstatus){
+	// 	header('location:activity_list.php?msg=1');
+	// 	exit;
+	// }else{
+	// 	header('location:activity_list.php?msg=2');
+	// 	exit;
+	// }
 }
 
 include('includes/header.php');
@@ -73,12 +92,7 @@ include('includes/header.php');
       </div>
       <a class="navbar-brand" href="#pablo">Create Events</a>
     </div>
-    <button class="navbar-toggler" type="button" data-toggle="collapse" aria-controls="navigation-index" aria-expanded="false" aria-label="Toggle navigation" data-target="#navigation-example">
-    <span class="sr-only">Toggle navigation</span>
-    <span class="navbar-toggler-icon icon-bar"></span>
-    <span class="navbar-toggler-icon icon-bar"></span>
-    <span class="navbar-toggler-icon icon-bar"></span>
-    </button>
+    <marquee>CSS - Employee Engagement Survey</marquee>
   </div>
 </nav>
 <!-- End Navbar -->
@@ -86,6 +100,7 @@ include('includes/header.php');
 <div class="content">
 <div class="container-fluid">
   <input type="hidden" name="_token" value="<?php echo $token; ?>">
+  <input type="hidden" name="ab_engg_hiddn" id='ab_engg_hiddn' value="">
   <div class='row'>
   	<div class="col-md-12">
       <form id="TypeValidation" autocomplete="off" class="form-horizontal" action="" method="POST" novalidate="novalidate">
@@ -97,14 +112,14 @@ include('includes/header.php');
             </div>
           </div> -->
           <div class="card-body">
-            <div class="row">
-              <label class="col-sm-3 col-form-label">Activity Name</label>
+           <!--  <div class="row">
+              <label class="col-sm-3 col-form-label">Activity Title</label>
               <div class="col-sm-6">
                 <div class="form-group bmd-form-group has-danger">
                   <input class="form-control" name="title" required="true" aria-required="true" aria-invalid="true" type="text">
                 </div>
               </div>
-            </div>
+            </div> -->
             <div class="row">
               <label class="col-sm-3 col-form-label">Activity Date & time</label>
               <div class="col-sm-6">
@@ -164,7 +179,7 @@ include('includes/header.php');
 					</div>
 				</div>
 			</div>
-			<div class='absent'>
+			<div style='display: none'>
 				<div class="row">
 				    <label class="col-sm-3 col-form-label">Absent list</label>
 				    <div class="col-sm-6">
@@ -182,7 +197,7 @@ include('includes/header.php');
 						<div class="col-sm-10 checkbox-radios">
 			                <div class="form-check form-check-inline">
 			                  <label class="form-check-label">
-			                    <input class="form-check-input" name="exampleRadios" value="option1" type="radio"> Red
+			                    <input class="form-check-input" name="rag" value="Red" type="radio"> Red
 			                    <span class="circle">
 			                      <span class="check"></span>
 			                    </span>
@@ -191,7 +206,7 @@ include('includes/header.php');
 			                <div class="form-check form-check-inline">
 			                 	<div class="form-check">
 								  <label class="form-check-label">
-								    <input class="form-check-input" name="exampleRadios" value="option2" type="radio"> Amber
+								    <input class="form-check-input" name="rag" value="Amber" type="radio"> Amber
 								    <span class="circle">
 								      <span class="check"></span>
 								    </span>
@@ -201,7 +216,7 @@ include('includes/header.php');
 			                <div class="form-check form-check-inline">
 			                 	<div class="form-check">
 								  <label class="form-check-label">
-								    <input class="form-check-input" name="exampleRadios" value="option3" checked=""  type="radio"> Green
+								    <input class="form-check-input" name="rag" value="Green" checked=""  type="radio"> Green
 								    <span class="circle">
 								      <span class="check"></span>
 								    </span>
@@ -217,7 +232,7 @@ include('includes/header.php');
 				    <label class="col-sm-3 col-form-label">Type fo issue</label>
 				    <div class="col-sm-6">
 					    <div class="form-group bmd-form-group has-danger">
-						    <select class="form-control selectpicker" data-style="btn btn-link" id="issue" name='issue' title="Choose type of issue " data-size="7" tabindex="-98">
+						    <select class="form-control selectpicker" data-style="btn btn-link" id="issue" name='issue[]' title="Choose type of issue " multiple data-size="7" tabindex="-98">
 						    	<option value='Admin'>Admin</opiton>
 								<option value='IT'>IT</opiton>
 								<option value='Operations'>Operations</opiton>
@@ -225,6 +240,7 @@ include('includes/header.php');
 								<option value='HR'>HR</opiton>
 								<option value='Payroll'>Payroll</opiton>
 								<option value='Others'>Others</opiton>
+								<option value='None'>None</opiton>
 						    </select>
 						</div>
 					</div>
@@ -263,12 +279,12 @@ include('includes/header.php');
 				                        </div>
 				                        <div class="col-sm-4">
 				                            <div class="form-group has-danger bmd-form-group">
-				                                <input class="form-control input_str datetimepicker" id='ID1_start_date' name='ID1_start_date' type="text" placeholder="Start date time">
+				                                <input class="form-control input_str datetimepicker" id='ID1_start_date' name='ID1_start_date' type="text" placeholder="Start date">
 				                            </div>
 				                        </div>
 				                        <div class="col-sm-4">
 				                            <div class="form-group has-danger bmd-form-group">
-				                                <input class="form-control input_ed datetimepicker" id='ID1_end_date' name='ID1_end_date' type="text" placeholder="Start End time">
+				                                <input class="form-control input_ed datetimepicker" id='ID1_end_date' name='ID1_end_date' type="text" placeholder="End date">
 				                            </div>
 				                        </div>
 				                    </div>
@@ -306,9 +322,9 @@ include('includes/header.php');
 				</div>
       		</div>
           	<div class="card-footer ml-auto mr-auto">
-          		<button id='savebtn' type="submit" class="btn btn-rose btn-sm">Save<div class="ripple-container"></div></button>
+          		<button style='display: none;' id='savebtn' type="submit" class="btn btn-rose">Save<div class="ripple-container"></div></button>
 	            <button id='addbtn' type='button' class="btn btn-warning" data-toggle="modal" data-target="#myModal">Add Task<div class="ripple-container"></div></button>
-	            <button type="submit" class="btn btn-red">Cancel<div class="ripple-container"></div></button>
+	            <a href="activity_list.php"><button type="button" class="btn btn-red">Cancel<div class="ripple-container"></div></button>
 	            <a href="form.php"><button type="button" class="btn btn-info">Refresh<div class="ripple-container"></div></button></a>
             </div>
         </div>
@@ -322,6 +338,8 @@ include('includes/header.php');
 $('.select1').SumoSelect({ selectAll: true,search: true ,placeholder: 'Select Here'});
 $('#TypeValidation').validate();
 $('.datetimepicker').datetimepicker({
+	format: 'L',
+	format: 'DD/MM/YYYY',
     icons: {
         time: "fa fa-clock-o",
         date: "fa fa-calendar",
@@ -336,29 +354,37 @@ $('.datetimepicker').datetimepicker({
 });
 function loadengg(){
 	$('#engg')[0].sumo.unSelectAll();
-	$('#ab_engg')[0].sumo.unSelectAll();
+	// $('#ab_engg')[0].sumo.unSelectAll();
 	let acitityname = activity.value;
 	if(acitityname == 'RAG'){
-	 $('.rag').css('display','block')
+	 	$('.rag').css('display','block')
+	 	$('#savebtn').css('display','block')
+	 	$('#addbtn').css('display','none')
 	}else{
 	 	$('.rag').css('display','none')
+	 	$('#savebtn').css('display','none')
+	 	$('#addbtn').css('display','block')
+
 	}
 	if(acitityname == 'One to One' || acitityname == 'RAG' || acitityname == 'Skip level meeting'){
 		$('.list').css('display','block')
-		$('.absent').css('display','none');
+		$('.rag').css('display','block');
 		$('.issue_type').css('display','block')
 		$('.present').css('display','block')
 
 	}else if(acitityname == 'Events/Fun activity'){
 		$('.present').css('display','none')
-		$('.absent').css('display','none');
+		$('.rag').css('display','none');
 		$('.issue_type').css('display','none')
-		$('#savebtn').css(display,'block')
+		$('#savebtn').css('display','block')
+	 	$('#addbtn').css('display','none')
 	}else{
 		$('.list').css('display','none')
 		$('.present').css('display','block')
-		$('.absent').css('display','block');
+		$('.rag').css('display','none');
 		$('.issue_type').css('display','block')
+		$('#savebtn').css('display','none')
+	 	$('#addbtn').css('display','block')
 
 	}
 
@@ -394,9 +420,7 @@ function engglist(data) {
 		$('#engg').html(data[1])
 		$('#engg')[0].sumo.reload();
 
-		$('#ab_engg')[0].sumo.reload();
-		$('#ab_engg').html(data[1])
-		$('#ab_engg')[0].sumo.reload();
+		$('#ab_engg_hiddn').val(data[1]);
 	}
 }
 function ajaxfun(jsondata , functionname){
