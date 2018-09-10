@@ -1,17 +1,24 @@
 <?php
 include('includes/config.php');
-$taskAct = $commonobj->getQry("SELECT * from hr_task");
-if($_POST['task_act']){
+// if(isset($_POST['activity_date_time'])){
+	$taskAct = $commonobj->getQry("SELECT * from hr_task");
+// }
+if(isset($_POST['hdn_task_id'])){
 	extract($_POST);
-	$activity = $task_act;
-	if($task_act != 'Activity'){
-		$activitylist = $commonobj->getQry("SELECT * from hr_task_activity");
-		// foreach ($activitylist as $actkey => $actvalue) {
-		// 	$activityArr[$actvalue['task_id']] =  $actvalue;
-		// }
+	$taskdetailsArr = $commonobj->getQry("SELECT * from hr_task_activity_comments WHERE activity_id='$hdn_task_id'");
+	unset($taskdetailsArr[0]['end_date']);
+	unset($taskdetailsArr[0]['status']);
+	unset($taskdetailsArr[0]['comments']);
+	extract($taskdetailsArr[0]);
+	$insertQry = $conn->prepare("INSERT INTO `hr_task_activity_comments`(`task_id`, `activity_id`,`activity_title`, `start_date`, `end_date`, `comments`, `status`, `create_by`, `created_at`) VALUES (?,?,?,?,?,?,?,?,?)");
+	$insertedres= $insertQry->execute(array($task_id , $activity_id , $activity_title , $start_date , date('Y-m-d',strtotime($end_date)) , $comments ,$status, $username , $dbdatetime));
+	if($insertedres){
+		header('location:activity_list.php?msg=1');
+		exit;
+	}else{
+		header('location:activity_list.php?msg=2');
+		exit;
 	}
-}else{
-	$activity ='Activity';
 }
 
 include('includes/header.php');
@@ -33,19 +40,15 @@ include('includes/header.php');
 <div class="content">
 <div class="content">
 <div class="container-fluid">
-<form action="" method="Post" accept-charset="utf-8" id='activity_form'>
+<form method="Post" id='activity_form' autocomplete="off">
+<input type="hidden" id="hdn_task" name='hdn_task_id'>
 	<div class="row">
       <div class="col-md-12">
         <div class="card">
           <div class="card-body">
           	<div class='row'>
           		<div class="col-md-3">
-          			<div class="form-group bmd-form-group has-danger">
-					    <select class="form-control selectpicker" data-style="btn btn-link" id="activity" title="Type of list" data-size="6" tabindex="-98" required name='task_act' aria-invalid="true">
-					        <option value="Activity" <?=$activity=='Activity'?'Selected':'' ?>>Activity</option>
-							<option value="Task" <?=$activity=='Task'?'Selected':'' ?>>Task</option>
-					    </select>
-					</div>
+          			<input type="text" id="search"/ class="form-control" placeholder="Search..." style="margin-bottom:15px;">
           		</div>
           		<div class="col-md-3">
           			<div class="form-group bmd-form-group has-danger">
@@ -54,7 +57,7 @@ include('includes/header.php');
           		</div>
           		<div class="col-md-3">
           			<div class="form-group bmd-form-group has-danger">
-		            	<input class="form-control datetimepicker" name='activity_date_time' value="" type="text"  aria-required="true" aria-invalid="true"  placeholder="End Date">
+		            	<input class="form-control datetimepicker" name='activity_end_time' value="" type="text"  aria-required="true" aria-invalid="true"  placeholder="End Date">
 		          </div>
           		</div>
           		<div class="col-md-3">
@@ -62,141 +65,239 @@ include('includes/header.php');
           		</div>
           	</div>
             <div class="table-responsive">
-            <?php if($activity == 'Activity'){ ?>
-	              <table id='myTable' class="table table-striped table-no-bordered table-hover dataTable dtr-inline" role="grid" aria-describedby="datatables_info" width="100%" cellspacing="0">
-	                <thead class=" text-primary">
+
+	              <table id='myTable' class="table table-striped table-bordered table-hover dataTable dtr-inline text-center" role="grid" aria-describedby="datatables_info" width="100%" cellspacing="0">
+				<thead class=" text-primary">
 	                  	<tr>
 	                  	<th>ID</th>
-	                  	<th>Title</th>
+	                  	<th>Activity</th>
 	                  	<th>Date</th>
-	                  	<th>Activity Type</th>
 	                  	<th>Client</th>
 	                  	<th>Team</th>
+	                  	<th>Status</th>
+	                  	<th>Action</th>
 	                	</tr>
 	                </thead>
-	                <tbody>
-	                  <?php $i=1; foreach ($taskAct as $key => $value) { extract($value) ?>
+				</thead>
+					<tbody>
+	                  <?php $i=1; foreach ($taskAct as $key => $values) { extract($values); 
+	                  	$taskAct = $commonobj->getQry("SELECT * from hr_task_activity_comments where task_id in (SELECT id from hr_task_activity where task_id=".$id.")");
+	                  	$lastrecordArr = tasklastRecord($taskAct);
+	                  	$statusArr = statusAtt($taskAct);
+	                  	$caseStatus[] = ((in_array('Open',$statusArr) ? "Open":((in_array('Work in progress',$statusArr) ? "Work in progress" : "Others"))));
+	                  	
+	                  	?>
                   		<tr>
 	                  		<td><?=$i?></td>
-	                  		<td><?=$activity_title?></td>
-	                  		<td><?=date('d-m-Y',strtotime($activity_date_time))?></td>
 	                  		<td><?=$activity_type?></td>
+	                  		<td><?=date('d-M-Y',strtotime($activity_date_time))?></td>
 	                  		<td><?=$client?></td>
 	                  		<td><?=$team?></td>
+	                  		<td><?=$caseStatus[0]?></td>
+	                  		<td class="buttontd">
+	                  		<?php
+	                  		if(count($lastrecordArr) > 0){ ?>
+								<button type="button" rel="tooltip" id="activity_<?=$i?>" class="btn btn-success btn-link btn-sm" data-original-title="" title=""><i class="material-icons">toc</i><div class="ripple-container"></div></button>
+								<?php } ?>
+							</td>
                   		</tr>
-	                  	<?php $i++; }
-	                  ?>
-	                </tbody>
-	              </table>
-	            <?php } else { ?>
-	            	<table id='myTable' class="table table-striped table-no-bordered table-hover dataTable dtr-inline" role="grid" aria-describedby="datatables_info" width="100%" cellspacing="0">
-		                <thead class=" text-primary">
-		                  	<tr>
-		                  	<th>ID</th>
-		                  	<th>Task Name</th>
-		                  	<th>Start Date</th>
-		                  	<th>End Date</th>
-		                  	<th>Comments</th>
-		                  	<th>Status</th>
-		                  	<th>Action</th>
-		                	</tr>
-		                </thead>
-		                <tbody>
-		                  <?php $i=1; foreach ($activitylist as $key => $value) { extract($value) ?>
-	                  		<tr>
-		                  		<td><?=$i?></td>
-		                  		<td><?=$task_title?></td>
-		                  		<td><?=date('d-m-Y',strtotime($start_date))?></td>
-		                  		<td><?=date('d-m-Y',strtotime($end_date))?></td>
-		                  		<td><?=$task_cmd?></td>
-		                  		<td><?=$status?></td>
-		                  		<td><a href="#" title=""><i class="material-icons" data-toggle="modal" data-target="#myModal_<?=$i?>" style='font-size: .875rem;'>edit</i><div class="ripple-container"></a>
+							<thead id="task_<?php echo $i;?>" class='text-center table table-striped table-bordered table-hover' style='display: none'>
+							<tr class="portlet box green" style='background-color: #32c5d2;'>
+							   <td>ID</td>
+			                  	<td>Task Name</td>
+			                  	<td>Start Date</td>
+			                  	<td>End Date</td>
+			                  	<td>Comments</td>
+			                  	<td>Status</td>
+			                  	<td>Action</td>
+							</tr>
+							<?php
+							   if(count($lastrecordArr) > 0){
+							   	$j=1;
+							    foreach ($lastrecordArr as $key => $val) {							   		
+							   ?>
+							<tr class='text-center' style='background-color:#D8EDEF'>
+								
+							   <td><?=$j?></td>
+		                  		<td><?=$val['activity_title']?></td>
+		                  		<td><?=date('d-m-Y',strtotime($val['start_date']))?></td>
+		                  		<td><?=date('d-m-Y',strtotime($val['end_date']))?></td>
+		                  		<td><?=$val['comments']?></td>
+		                  		<td><?=$val['status']?></td>
+		                  		<td>
+		                  			<?php if($val['status'] !='Closed' ) { ?>
+		                  			<a href="#" title=""><i class="material-icons taskbtn" data-toggle="modal" style='font-size: .875rem;' id="tsk_id_<?=$val[activity_id]?>">edit</i><div class="ripple-container"></a>
+		                  			<?php } ?>
 		                  		</td>
-	                  		</tr>
-	                  		<div class="modal fade" id="myModal_<?=$i?>" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" style="display: none;" aria-hidden="true">
-								<div class="modal-dialog">
-								    <div class="modal-content">
-								        <div class="modal-header">
-								            <h4 class="modal-title">Update Task</h4>
-								            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">
-								            <i class="material-icons">clear</i>
-								            </button>
-								        </div>
-								        <div class="modal-body">
-								            <div id="entry1" class="clonedInput">
-								                <hr>
-								                <fieldset>
-								                    <div class='row'>
-								                        <div class="col-sm-6">
-								                            <div class="form-group has-danger bmd-form-group">
-								                                <input class="form-control input_ed datetimepicker" id='ID1_end_date' name='ID1_end_date' type="text" placeholder="End date">
-								                            </div>
-								                        </div>
-								                        <div class="col-sm-6">
-								                            <div class="form-group has-danger bmd-form-group">
-								                                 <select class="form-control input_st" data-style="btn btn-link" id='ID1_status'  name='ID1_status' data-size="7" tabindex="-98">
-															    	<option value=''>-- Status -- </opiton>
-															    	<option value='Open'>Open</opiton>
-																	<option value='Work in progress'>Work in progress</opiton>
-																	<option value='Closed'>Closed</opiton>
-															    </select>
-								                            </div>
-								                        </div>
-								                    </div>
-								                    <div class='row'>
-									                    <div class="col-md-12">
-									                    	<div class="form-group has-danger bmd-form-group">
-								                                <input class="form-control input_cmt" name="ID1_comments" id="ID1_comments" type="text" placeholder="Task comments" >
-								                            </div>
-									                    </div>
-							                        </div>
-								                </fieldset>
-								            </div>
-								        </div>
-								        <div class="modal-footer">
-								            <button type="submit" class="btn btn-rose btn-sm">Save<div class="ripple-container"></div></button>
-								        </div>
-								    </div>
-								</div>
-				      		</div>
-		                  	<?php $i++; }
-		                  ?>
-		                </tbody>
-		            </table>
-	            <?php } ?>
+							</tr>
+							<?php
+							   $j++;
+							   }
+							   } else {
+							   echo "<tr><td colspan=\"6\"><center>No Records found</center></td></tr>";
+							   }
+							   ?>
+							</thead>
+	                  	<?php   $i++; } ?>
+	                </tbody>
+				</table>
+				<div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" style="display: none;" aria-hidden="true">
+						<div class="modal-dialog">
+						    <div class="modal-content">
+						        <div class="modal-header">
+						            <h4 class="modal-title" id='titlehead'></h4>
+						            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">
+						            <i class="material-icons">clear</i>
+						            </button>
+						        </div>
+						        <div class="modal-body">
+					                <fieldset>
+					                    <div class='row'>
+					                        <div class="col-sm-6">
+					                            <div class="form-group has-danger bmd-form-group">
+					                                <input class="form-control input_ed datetimepicker" id='end_date' name='end_date' type="text" placeholder="End date" value="">
+					                            </div>
+					                        </div>
+					                        <div class="col-sm-6">
+					                            <div class="form-group has-danger bmd-form-group">
+					                                 <select class="form-control input_st" data-style="btn btn-link" id='status'  name='status' data-size="7" tabindex="-98">
+												    	<option value='Open' <?=$status=='Open'?'selected':''?>>Open</opiton>
+														<option value='Work in progress' <?=$status=='Work in progress'?'selected':''?>>Work in progress</opiton>
+														<option value='Closed' <?=$status=='Closed'?'selected':''?>>Closed</opiton>
+												    </select>
+					                            </div>
+					                        </div>
+					                    </div>
+					                    <div class='row'>
+						                    <div class="col-md-12">
+						                    	<div class="form-group has-danger bmd-form-group">
+					                                <input class="form-control input_cmt" name="comments" id="comments" type="text" placeholder="Task comments" >
+					                            </div>
+						                    </div>
+				                        </div>
+					                </fieldset>
+						        </div>
+						        <div class="modal-footer">
+						            <button type="submit" class="btn btn-rose btn-sm" click='savefun()'>Save<div class="ripple-container"></div></button>
+						        </div>
+						    </div>
+						</div>
+	      			</div>	
             </div>
           </div>
         </div>
       </div>
     </div>
 </form>
-
-<?php include('includes/footer.php'); ?>
+<?php include('includes/footer.php');
+	function tasklastRecord($taskAct){
+		foreach ($taskAct as $key => $value) {
+			$lastrecordArr[$value['activity_id']] = $value;
+		}
+		return $lastrecordArr;
+	} 
+	function statusAtt($taskAct){
+		foreach ($taskAct as $key => $value) {
+			$statusupdate[$value['activity_id']] = $value['status'];
+		}
+		return $statusupdate;
+	}
+	
+ ?>
 <script>
 	$(document).ready( function () {
-	    $('#myTable').DataTable();
-	} );
-	$('.datetimepicker').datetimepicker({
-		format: 'L',
-		format: 'DD/MM/YYYY',
-    icons: {
-        time: "fa fa-clock-o",
-        date: "fa fa-calendar",
-        up: "fa fa-chevron-up",
-        down: "fa fa-chevron-down",
-        previous: 'fa fa-chevron-left',
-        next: 'fa fa-chevron-right',
-        today: 'fa fa-screenshot',
-        clear: 'fa fa-trash',
-        close: 'fa fa-remove',
-    }
+		//$('#myTable').DataTable();
+		$('.datetimepicker').datetimepicker({
+			format: 'L',
+			format: 'DD/MM/YYYY',
+	    icons: {
+	        time: "fa fa-clock-o",
+	        date: "fa fa-calendar",
+	        up: "fa fa-chevron-up",
+	        down: "fa fa-chevron-down",
+	        previous: 'fa fa-chevron-left',
+	        next: 'fa fa-chevron-right',
+	        today: 'fa fa-screenshot',
+	        clear: 'fa fa-trash',
+	        close: 'fa fa-remove',
+	    }
+	});
 });
 </script>
-<style>
-	td , th{
-		font-size: 13px;
+
+<script>
+
+$(document).ready(function(){
+	$(".dataTable tr .buttontd button").click(function(){
+		//console.log($(this).attr('id'));
+		var buttonid = $(this).attr('id');
+		var arr = buttonid.split('_');
+		var id = arr[1];
+    	$("#task_"+id).slideToggle();
+    	return false;
+	});
+});
+	function funexport(){
+	    document.getElementById("frmsrch").action = "importtaskstatus.php"; 
+	    document.getElementById("frmsrch").submit();
+	    return true;
 	}
-	.table thead tr th {
-	    font-size: 15px;
+	$(document).ready(function()
+	{
+		$('#search').keyup(function()
+		{
+			searchTable($(this).val());
+		});
+	});
+	function searchTable(inputVal)
+	{
+		var table = $('#myTable');
+		table.find('tr').each(function(index, row)
+		{
+			var allCells = $(row).find('td');
+			if(allCells.length > 0)
+			{
+				var found = false;
+				allCells.each(function(index, td)
+				{
+					var regExp = new RegExp(inputVal, 'i');
+					if(regExp.test($(td).text()))
+					{
+						found = true;
+						return false;
+					}
+				});
+				if(found == true)$(row).show();else $(row).hide();
+			}
+		});
 	}
-</style>
+
+	$('.taskbtn').click(function(){
+		let attr_id= $(this).attr('id');
+		 id = attr_id.split('_');
+		 $.ajax({
+	 		url: 'ajax.php',
+	 		type: 'post',
+	 		data: {'task_id':id[2],'come_form':'activity_list'},
+	 		success: function (data) {
+	 			let op = JSON.parse(data)
+	 			console.log(op)
+	 			hdn_task.value = op[0]['activity_id']
+	 			if(op[0]['end_date'] != ''){
+	 				console.log(op[0]['end_date'])
+	 				let date = new Date(op[0]['end_date']);
+	 				end_date.value = n(date.getDate())+'/'+ n(date.getMonth()+1)+'/'+date.getFullYear()
+	 			}
+				
+	 			status.value = op[0]['status']
+	 			// comments.value = op[0]['task_cmd']
+	 			$('#titlehead').html(op[0]['activity_title'] !='' ? op[0]['activity_title'].toUpperCase() : 'Title')
+	 			$('#myModal').modal({show:true});
+
+	 		}
+	 	});
+	});
+	function n(n){
+	    return n > 9 ? "" + n: "0" + n;
+	}
+</script>
