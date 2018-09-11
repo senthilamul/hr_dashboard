@@ -66,7 +66,7 @@ if(isset($_POST['activity_date_time'])){
 
 include('includes/header.php');
 ?>
-<link rel="stylesheet" type="text/css" href="../hr/assets/sumoselect.min.css">
+<link rel="stylesheet" type="text/css" href="../attrition/assets/sumoselect.min.css">
 
 <style>
 	.error{color:red !important;}
@@ -268,6 +268,7 @@ include('includes/header.php');
 				        </div>
 				        <div class="modal-body">
 				            <div id="entry1" class="clonedInput">
+
 				                <h6 id="reference" name="reference" class="heading-reference">Task #1</h6>
 				                <hr>
 				                <fieldset>
@@ -317,6 +318,9 @@ include('includes/header.php');
 				            <button type="button" id="btnDel" name="btnDel" class="btn btn-danger btn-sm float-left">
 				                Remove Last Section<div class="ripple-container"></div>
 				            </button>
+				            <button style='display: none;' type="button" id="btnDel1" name="btnDel1" class="btn btn-danger btn-sm float-left">
+				                Remove Last Section<div class="ripple-container"></div>
+				            </button>
 				            <button type="submit" class="btn btn-rose btn-sm">Save<div class="ripple-container"></div></button>
 				        </div>
 				    </div>
@@ -333,11 +337,44 @@ include('includes/header.php');
     </div>
    </div>
 <?php include('includes/footer.php'); ?>
- <script type="text/javascript" src="../hr/assets/clone-path.js"></script>
-<script src="../hr/assets/sumoselect.min.js" type="text/javascript"></script>
+ <script type="text/javascript" src="../attrition/assets/clone-path.js"></script>
+<script src="../attrition/assets/sumoselect.min.js" type="text/javascript"></script>
 <script>
- // var numb     = $('.clonedInput').length
- // console.log(numb)
+//function addSection(){
+$("#issue").change(function(e){
+	e.stopPropagation();
+	var selectedValue  = $(this).val();
+	var selectedCount = selectedValue.length;
+	var num  = $('.clonedInput').length;
+	if(selectedCount > 0)
+	{
+		if(selectedCount == 1)
+		{
+			while(num > selectedCount)
+			{
+				//$('#btnDel').click();
+				$('#btnDel1').click();
+				num=num-1;
+			}
+		}else if(selectedCount > 1)
+		{
+			if(num <= selectedCount)
+			{
+				$('#btnAdd').click();
+			}else if(num > selectedCount){
+				while(num >= selectedCount)
+				{
+					//$('#btnDel').click();
+					$('#btnDel1').click();
+					num=num-1;
+				}
+			}
+		}
+		
+	}
+	
+});
+//}
 $('.select1').SumoSelect({ selectAll: true,search: true ,placeholder: 'Select Here'});
 $('#TypeValidation').validate();
 $('.datetimepicker').datetimepicker({
