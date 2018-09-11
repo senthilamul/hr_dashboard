@@ -55,13 +55,13 @@ if(isset($_POST['activity_date_time'])){
 			$raginsert = $conn->prepare("UPDATE master_alcon_table set `rag_status` = '$rag', `created_by`='$username',`create_at`='$dbdatetime',`update_at`='$dbdatetime' where month='$month' and emp_name in ('".implode("','",$pr_engg)."')");
 			$raginsert->execute();
 		}
-	// if($insertstatus){
-	// 	header('location:activity_list.php?msg=1');
-	// 	exit;
-	// }else{
-	// 	header('location:activity_list.php?msg=2');
-	// 	exit;
-	// }
+	if($insertstatus){
+		header('location:activity_list.php?msg=1');
+		exit;
+	}else{
+		header('location:activity_list.php?msg=2');
+		exit;
+	}
 }
 
 include('includes/header.php');
@@ -148,7 +148,7 @@ include('includes/header.php');
 			    <label class="col-sm-3 col-form-label">Client</label>
 			    <div class="col-sm-6">
 				    <div class="form-group bmd-form-group has-danger">
-					    <select class="form-control selectpicker" data-style="btn btn-link" id="client" name="client"  data-size="7" tabindex="-98" required title="Choose Client" onchange="loadengg()">
+					    <select class="form-control selectpicker" data-style="btn btn-link" id="client" name="client"  data-size="7" tabindex="-98" title="Choose Client" onchange="loadengg()" required>
 					        <?php 
 					        	foreach ($clientArr as $key => $cname) {
 					        		echo "<option value='$cname'>".$cname."</option>";
@@ -159,11 +159,12 @@ include('includes/header.php');
 					</div>
 				</div>
 			</div>
+			
 			<div class="row">
 			    <label class="col-sm-3 col-form-label">Team</label>
 			    <div class="col-sm-6">
 				    <div class="form-group bmd-form-group has-danger">
-					    <select class="form-control selectpicker" data-style="btn btn-link" id="team" name='team' title="Choose Team" data-size="7" tabindex="-98"  onchange="loadengg1()">
+					    <select class="form-control selectpicker" data-style="btn btn-link" id="team" name='team' title="Choose Team" data-size="7" tabindex="-98"  onchange="loadengg1()" required>
 					    </select>
 					</div>
 				</div>
@@ -232,7 +233,7 @@ include('includes/header.php');
 				    <label class="col-sm-3 col-form-label">Type fo issue</label>
 				    <div class="col-sm-6">
 					    <div class="form-group bmd-form-group has-danger">
-						    <select class="form-control selectpicker" data-style="btn btn-link" id="issue" name='issue[]' title="Choose type of issue " multiple data-size="7" tabindex="-98">
+						    <select class="form-control selectpicker" data-style="btn btn-link" id="issue" name='issue[]' title="Choose type of issue " multiple data-size="7" tabindex="-98" required>
 						    	<option value='Admin'>Admin</opiton>
 								<option value='IT'>IT</opiton>
 								<option value='Operations'>Operations</opiton>
@@ -267,24 +268,23 @@ include('includes/header.php');
 				        </div>
 				        <div class="modal-body">
 				            <div id="entry1" class="clonedInput">
-
 				                <h6 id="reference" name="reference" class="heading-reference">Task #1</h6>
 				                <hr>
 				                <fieldset>
 				                    <div class='row'>
 				                        <div class="col-sm-4">
 				                            <div class="form-group has-danger bmd-form-group">
-				                                <input class="form-control select_ttl" name="ID1_title" id="ID1_title" type="text" placeholder="Task Title">
+				                                <input class="form-control select_ttl" name="ID1_title" id="ID1_title" type="text" placeholder="Task Title" required>
 				                            </div>
 				                        </div>
 				                        <div class="col-sm-4">
 				                            <div class="form-group has-danger bmd-form-group">
-				                                <input class="form-control input_str datetimepicker" id='ID1_start_date' name='ID1_start_date' type="text" placeholder="Start date">
+				                                <input class="form-control input_str datetimepicker" id='ID1_start_date' name='ID1_start_date' type="text" placeholder="Start date" required>
 				                            </div>
 				                        </div>
 				                        <div class="col-sm-4">
 				                            <div class="form-group has-danger bmd-form-group">
-				                                <input class="form-control input_ed datetimepicker" id='ID1_end_date' name='ID1_end_date' type="text" placeholder="End date">
+				                                <input class="form-control input_ed datetimepicker" id='ID1_end_date' name='ID1_end_date' type="text" placeholder="End date" required>
 				                            </div>
 				                        </div>
 				                    </div>
@@ -298,10 +298,11 @@ include('includes/header.php');
 													<option value='Closed'>Closed</opiton>
 											    </select>
 				                            </div>
+				                            
 				                        </div>
 				                        <div class="col-sm-8">
 				                            <div class="form-group has-danger bmd-form-group">
-				                                <input class="form-control input_cmt" name="ID1_comments" id="ID1_comments" type="text" placeholder="Task comments" >
+				                                <input class="form-control input_cmt" name="ID1_comments" id="ID1_comments" type="text" placeholder="Task comments" required>
 				                            </div>
 				                        </div>
 				                    </div>
@@ -335,6 +336,8 @@ include('includes/header.php');
  <script type="text/javascript" src="../hr/assets/clone-path.js"></script>
 <script src="../hr/assets/sumoselect.min.js" type="text/javascript"></script>
 <script>
+ // var numb     = $('.clonedInput').length
+ // console.log(numb)
 $('.select1').SumoSelect({ selectAll: true,search: true ,placeholder: 'Select Here'});
 $('#TypeValidation').validate();
 $('.datetimepicker').datetimepicker({
@@ -371,6 +374,7 @@ function loadengg(){
 		$('.rag').css('display','block');
 		$('.issue_type').css('display','block')
 		$('.present').css('display','block')
+		console.log('hi');
 
 	}else if(acitityname == 'Events/Fun activity'){
 		$('.present').css('display','none')
@@ -408,7 +412,7 @@ function loadengg1(){
 function dropdown(data , jsondata) {
 	 let teamname = data[0];
 	 let engg = data[1];
-	 console.log(jsondata)
+	 //console.log(jsondata)
 	$('#team').selectpicker('refresh').html(teamname).selectpicker('refresh');
 }
 // $('#team').change(function(){
@@ -437,5 +441,8 @@ function ajaxfun(jsondata , functionname){
             alert('Error occured');
         }
 	});
+}
+function callajaxfun(){
+	alert('h');
 }
 </script>
