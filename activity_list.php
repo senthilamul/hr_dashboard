@@ -1,16 +1,35 @@
 <?php
 include('includes/config.php');
-// if(isset($_POST['activity_date_time'])){
-	$taskAct = $commonobj->getQry("SELECT * from hr_task");
-// }
+$msg = $_GET['msg'];
+$taskAct = $commonobj->getQry("SELECT * from hr_task");
 if(isset($_POST['hdn_task_id'])){
 	extract($_POST);
 	$taskdetailsArr = $commonobj->getQry("SELECT * from hr_task_activity_comments WHERE activity_id='$hdn_task_id'");
-	unset($taskdetailsArr[0]['end_date']);
+	print_r($taskdetailsArr);
+	//unset($taskdetailsArr[0]['end_date']);
 	unset($taskdetailsArr[0]['status']);
 	unset($taskdetailsArr[0]['comments']);
+	unset($taskdetailsArr[0]['comments']);
 	extract($taskdetailsArr[0]);
-	$insertQry = $conn->prepare("INSERT INTO `hr_task_activity_comments`(`task_id`, `activity_id`,`activity_title`, `start_date`, `end_date`, `comments`, `status`, `create_by`, `created_at`) VALUES (?,?,?,?,?,?,?,?,?)");
+
+	$actionDate = str_replace('/','-',$end_date);
+	$cr_date       = date("d-M-y", strtotime($actionDate));
+	$date          = date("Y-m-d", strtotime($actionDate));
+    $cr_addyear    = date("Y", strtotime($actionDate));
+    $cr_month      = date("M", strtotime($actionDate));
+    if($cr_month=='Jan' || $cr_month=='Feb' || $cr_month=='Mar'){
+        $cr_qtr='Q1'." ".$cr_addyear;
+    }else if($cr_month=='Apr' || $cr_month=='May' || $cr_month=='Jun'){
+        $cr_qtr='Q2'." ".$cr_addyear;
+    }else if($cr_month=='Jul' || $cr_month=='Aug' || $cr_month=='Sep'){
+        $cr_qtr='Q3'." ".$cr_addyear;
+    }else{
+        $cr_qtr='Q4'." ".$cr_addyear;
+    }
+    $cr_month       = date("M", strtotime($cr_date))." ".$cr_addyear;
+    $cr_week        ="Wk " . date("W", strtotime($cr_date))." ".$cr_addyear;
+    exit;
+	$insertQry = $conn->prepare("INSERT INTO `hr_task_activity_comments`(`task_id`, `activity_id`,`activity_type`,`task_type`, `start_date`, `end_date`, `comments`, `status`, `create_by`, `created_at`) VALUES (?,?,?,?,?,?,?,?,?)");
 	$insertedres= $insertQry->execute(array($task_id , $activity_id , $activity_title , $start_date , date('Y-m-d',strtotime($end_date)) , $comments ,$status, $username , $dbdatetime));
 	if($insertedres){
 		header('location:activity_list.php?msg=1');
@@ -46,11 +65,21 @@ include('includes/header.php');
       <div class="col-md-12">
         <div class="card">
           <div class="card-body">
+          <?php
+          	if(!empty($msg)){ ?>
+          		<div class="alert <?=$msg==1?'alert-success':'alert-danger'?>">
+		            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+		              <i class="material-icons">close</i>
+		            </button>
+		            <span>
+		              <b><?=$msg==1?'Success':'Error'?> - </b> <?=$msg==1 ? 'Task Status Updated Successfully':'Task Status Not Updated'?></span>
+		          </div>
+          	<?php } ?>
           	<div class='row'>
           		<div class="col-md-3">
-          			<input type="text" id="search"/ class="form-control" placeholder="Search..." style="margin-bottom:15px;">
+          			<input type="text" id="search"/ class="form-control" placeholder="Search Task..." style="margin-bottom:15px;">
           		</div>
-          		<div class="col-md-3">
+          		<!-- <div class="col-md-3">
           			<div class="form-group bmd-form-group has-danger">
 		            	<input class="form-control datetimepicker" name='activity_date_time' value="" type="text"aria-required="true" aria-invalid="true" placeholder="Start Date">
 		          </div>
@@ -62,11 +91,11 @@ include('includes/header.php');
           		</div>
           		<div class="col-md-3">
           			<button type="submit" class="btn btn-info btn-sm form-control">Submit<div class="ripple-container"></div></button>
-          		</div>
+          		</div> -->
           	</div>
             <div class="table-responsive">
 
-	              <table id='myTable' class="table table-striped table-bordered table-hover dataTable dtr-inline text-center" role="grid" aria-describedby="datatables_info" width="100%" cellspacing="0">
+	              <table id='myTable' class="table table-striped table-bordered table-hover dataTable  text-center" role="grid" aria-describedby="datatables_info" width="100%" cellspacing="0">
 				<thead class=" text-primary">
 	                  	<tr>
 	                  	<th>ID</th>
@@ -81,19 +110,26 @@ include('includes/header.php');
 				</thead>
 					<tbody>
 	                  <?php $i=1; foreach ($taskAct as $key => $values) { extract($values); 
-	                  	$taskAct = $commonobj->getQry("SELECT * from hr_task_activity_comments where task_id in (SELECT id from hr_task_activity where task_id=".$id.")");
+	                  	$idArr = $commonobj->arrayColumn($commonobj->getQry("SELECT id from hr_task_activity where task_id=".$id),'','id');
+	                  	$taskAct = $commonobj->getQry("SELECT * from hr_task_activity_comments where activity_id in (".implode(',',$idArr).") ");
+
 	                  	$lastrecordArr = tasklastRecord($taskAct);
 	                  	$statusArr = statusAtt($taskAct);
-	                  	$caseStatus[] = ((in_array('Open',$statusArr) ? "Open":((in_array('Work in progress',$statusArr) ? "Work in progress" : "Others"))));
-	                  	
+	                  	if(in_array('Open',$statusArr )){
+	                  		$caseStatus = 'Open';
+	                  	}else if(in_array('Work in progress',$statusArr)){
+	                  		$caseStatus = 'Work in progress';
+	                  	}else{
+	                  		$caseStatus = 'Closed';
+	                  	}
 	                  	?>
-                  		<tr>
+                  		<tr class="portlet box green" style='background-color: #D8EDEF;'>
 	                  		<td><?=$i?></td>
 	                  		<td><?=$activity_type?></td>
 	                  		<td><?=date('d-M-Y',strtotime($activity_date_time))?></td>
 	                  		<td><?=$client?></td>
 	                  		<td><?=$team?></td>
-	                  		<td><?=$caseStatus[0]?></td>
+	                  		<td><?=$caseStatus?></td>
 	                  		<td class="buttontd">
 	                  		<?php
 	                  		if(count($lastrecordArr) > 0){ ?>
@@ -104,7 +140,7 @@ include('includes/header.php');
 							<thead id="task_<?php echo $i;?>" class='text-center table table-striped table-bordered table-hover' style='display: none'>
 							<tr class="portlet box green" style='background-color: #32c5d2;'>
 							   <td>ID</td>
-			                  	<td>Task Name</td>
+			                  	<td>Task Type</td>
 			                  	<td>Start Date</td>
 			                  	<td>End Date</td>
 			                  	<td>Comments</td>
@@ -119,10 +155,10 @@ include('includes/header.php');
 							<tr class='text-center' style='background-color:#D8EDEF'>
 								
 							   <td><?=$j?></td>
-		                  		<td><?=$val['activity_title']?></td>
+		                  		<td><?=$val['task_type']?></td>
 		                  		<td><?=date('d-m-Y',strtotime($val['start_date']))?></td>
 		                  		<td><?=date('d-m-Y',strtotime($val['end_date']))?></td>
-		                  		<td><?=$val['comments']?></td>
+		                  		<td><?=$val['task_comments']?></td>
 		                  		<td><?=$val['status']?></td>
 		                  		<td>
 		                  			<?php if($val['status'] !='Closed' ) { ?>
@@ -153,12 +189,12 @@ include('includes/header.php');
 						        <div class="modal-body">
 					                <fieldset>
 					                    <div class='row'>
-					                        <div class="col-sm-6">
+					                        <!--<div class="col-sm-6">
 					                            <div class="form-group has-danger bmd-form-group">
 					                                <input class="form-control input_ed datetimepicker" id='end_date' name='end_date' type="text" placeholder="End date" value="">
 					                            </div>
-					                        </div>
-					                        <div class="col-sm-6">
+					                        </div> -->
+					                        <div class="col-md-12">
 					                            <div class="form-group has-danger bmd-form-group">
 					                                 <select class="form-control input_st" data-style="btn btn-link" id='status'  name='status' data-size="7" tabindex="-98">
 												    	<option value='Open' <?=$status=='Open'?'selected':''?>>Open</opiton>
@@ -167,14 +203,13 @@ include('includes/header.php');
 												    </select>
 					                            </div>
 					                        </div>
-					                    </div>
-					                    <div class='row'>
-						                    <div class="col-md-12">
+					                        <div class="col-md-12">
 						                    	<div class="form-group has-danger bmd-form-group">
 					                                <input class="form-control input_cmt" name="comments" id="comments" type="text" placeholder="Task comments" >
 					                            </div>
 						                    </div>
-				                        </div>
+					                    </div>
+					                    
 					                </fieldset>
 						        </div>
 						        <div class="modal-footer">
@@ -237,11 +272,11 @@ $(document).ready(function(){
     	return false;
 	});
 });
-	function funexport(){
-	    document.getElementById("frmsrch").action = "importtaskstatus.php"; 
-	    document.getElementById("frmsrch").submit();
-	    return true;
-	}
+	// function funexport(){
+	//     document.getElementById("frmsrch").action = "importtaskstatus.php"; 
+	//     document.getElementById("frmsrch").submit();
+	//     return true;
+	// }
 	$(document).ready(function()
 	{
 		$('#search').keyup(function()
@@ -283,15 +318,15 @@ $(document).ready(function(){
 	 			let op = JSON.parse(data)
 	 			console.log(op)
 	 			hdn_task.value = op[0]['activity_id']
-	 			if(op[0]['end_date'] != ''){
+	 			/*if(op[0]['end_date'] != ''){
 	 				console.log(op[0]['end_date'])
 	 				let date = new Date(op[0]['end_date']);
 	 				end_date.value = n(date.getDate())+'/'+ n(date.getMonth()+1)+'/'+date.getFullYear()
-	 			}
+	 			}*/
 				
 	 			status.value = op[0]['status']
 	 			// comments.value = op[0]['task_cmd']
-	 			$('#titlehead').html(op[0]['activity_title'] !='' ? op[0]['activity_title'].toUpperCase() : 'Title')
+	 			$('#titlehead').html(op[0]['task_type'] !='' ? op[0]['task_type'].toUpperCase() : 'Title')
 	 			$('#myModal').modal({show:true});
 
 	 		}
