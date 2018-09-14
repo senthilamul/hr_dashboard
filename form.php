@@ -1,7 +1,8 @@
 <?php
 include('includes/config.php');
-error_reporting(0);
+// include('includes/session_check.php');
 $clientArr = $commonobj->arrayColumn($commonobj->getQry("SELECT distinct client from master_alcon_table where month = '$month' and client<>'' order by client asc"),'','client');
+echo "SELECT distinct client from master_alcon_table where month = '$month' and client<>'' order by client asc";
 if(isset($_POST['activity_date_time'])){
 	extract($_POST);
 	if($activity == 'L2 Connect' || $activity == 'TL/Manager connect' || $activity == 'Team Meeting'){
@@ -12,12 +13,12 @@ if(isset($_POST['activity_date_time'])){
 		}
 		$enggArr = $commonobj->arrayColumn($commonobj->getQry("SELECT distinct emp_name from master_alcon_table where team = '$team' and month='$month' $Qry order by emp_name asc") , '', 'emp_name');
 		$absentArr = array_diff($enggArr,$pr_engg);
-	}	
-
-	$cr_date       = date("d-M-y", strtotime($activity_date_time));
-	$date       = date("Y-m-d", strtotime($activity_date_time));
-    $cr_addyear    = date("Y", strtotime($activity_date_time));
-    $cr_month      = date("M", strtotime($activity_date_time));
+	}
+	
+	$cr_date       = date("d-M-y", strtotime(str_replace('/','-',$activity_date_time)));
+	$date          = date("Y-m-d", strtotime(str_replace('/','-',$activity_date_time)));
+    $cr_addyear    = date("Y", strtotime(str_replace('/','-',$activity_date_time)));
+    $cr_month      = date("M", strtotime(str_replace('/','-',$activity_date_time)));
     if($cr_month=='Jan' || $cr_month=='Feb' || $cr_month=='Mar'){
         $cr_qtr='Q1'." ".$cr_addyear;
     }else if($cr_month=='Apr' || $cr_month=='May' || $cr_month=='Jun'){
@@ -27,46 +28,48 @@ if(isset($_POST['activity_date_time'])){
     }else{
         $cr_qtr='Q4'." ".$cr_addyear;
     }
-    $cr_month       = date("M", strtotime($cr_date))." ".$cr_addyear;
-    $cr_week        ="Wk " . date("W", strtotime($cr_date))." ".$cr_addyear;
+	    $cr_month       = date("M", strtotime($cr_date))." ".$cr_addyear;
+	    $cr_week        ="Wk " . date("W", strtotime($cr_date))." ".$cr_addyear;
 	
-		$insertQry = $conn->prepare("INSERT INTO `hr_task`(`activity_date_time`, `activity_type`, `client`, `team`, `present_engg`, `absent_engg`, `category`, `f_week`, `f_month`, `f_qtr`, `created_by`, `create_at`, `update_at`) VALUES ( ?,?,?,?,?,?,?,?,?,?,?,?,?)");
+		$insertQry = $conn->prepare("INSERT INTO `hr_task`(`activity_date_time`, `activity_type`, `client`, `team`, `present_engg`, `absent_engg`, `category`, `f_week`, `f_month`, `f_qtr` , command, `created_by`, `create_at`, `update_at`) VALUES ( ?,?,?,?,?,?,?,?,?,?,?,?,? ,?)");
 		$absentname= count($absentArr) > 0 ? implode(',',$absentArr) :'';
 		$presentname = count($pr_engg) > 0 ? implode(',',$pr_engg): '';
-		$insertstatus = $insertQry->execute(array( $date , $activity , $client , $team , $presentname ,$absentname,implode(',',$issue), $cr_week ,  $cr_month , $cr_qtr , $username , $dbdatetime , $dbdatetime ));
+
+		$insertstatus = $insertQry->execute(array( $date , $activity , $client , $team , $presentname ,$absentname,implode(',',$issue), $cr_week ,  $cr_month , $cr_qtr , $cmd, $username , $dbdatetime , $dbdatetime ));
+
 			
 		$taskID = $conn->lastInsertId();
 		
-		if($activity != 'RAG' || $activity != 'Events/Fun activity'){
+		//if($activity != 'RAG' || $activity != 'Events/Fun activity'){
 			for ($i=1; $i <= $_POST['hidden_id'] ; $i++) { 
 				$title = $_POST["ID".$i."_title"];
-				$start_date = date('Y-m-d',strtotime($_POST["ID".$i."_start_date"]));
-				$end_time = date('Y-m-d',strtotime($_POST["ID".$i."_end_date"]));
+				$start_date = date('Y-m-d',strtotime(str_replace('/','-',$_POST["ID".$i."_start_date"])));
+				$end_time = date('Y-m-d',strtotime(str_replace('/','-',$_POST["ID".$i."_end_date"])));
 				$status = $_POST["ID".$i."_status"];
-				$cmd = $_POST["ID".$i."_comments"];
+				$cmds = $_POST["ID".$i."_comments"];
 				$taskActivity = $conn->prepare("INSERT INTO `hr_task_activity`(`task_id`,`create_by`,`create_at`) VALUES (?,?,?)");
 				$taskstatus = $taskActivity->execute(array($taskID , $username,$dbdatetime));
 				$activity_ID = $conn->lastInsertId();
-				$insertcommts = $conn->prepare("INSERT INTO `hr_task_activity_comments`(`task_id`,`activity_id`, `activity_title`, `start_date`, `end_date`, `comments`, `status`,`create_by`, `created_at`) VALUES (?,?,?,?,?,?,?,?,?)");
-				$insertcommts->execute(array($taskID,$activity_ID , $title ,$start_date , $end_time , $cmd , $status,$username , $dbdatetime ));
+				$insertcommts = $conn->prepare("INSERT INTO `hr_task_activity_comments`(`task_id`,`activity_id`, `activity_type`,`task_type`, `start_date`, `end_date`, `task_comments`, `status`,`client`,`team`,`week`,`month`,`qtr`,`create_by`, `created_at`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+				$insertcommts->execute(array($taskID,$activity_ID ,$activity ,$title ,$start_date , $end_time , $cmds , $status,$client , $team ,$cr_week ,  $cr_month , $cr_qtr,$username , $dbdatetime ));
 			}
-		}
+		//}
 		if($activity == 'RAG'){
 			$raginsert = $conn->prepare("UPDATE master_alcon_table set `rag_status` = '$rag', `created_by`='$username',`create_at`='$dbdatetime',`update_at`='$dbdatetime' where month='$month' and emp_name in ('".implode("','",$pr_engg)."')");
 			$raginsert->execute();
 		}
-	if($insertstatus){
-		header('location:activity_list.php?msg=1');
-		exit;
-	}else{
-		header('location:activity_list.php?msg=2');
-		exit;
-	}
+	//if($insertstatus){
+	//	header('location:activity_list.php?msg=1');
+	//	exit;
+	//}else{
+	//	header('location:activity_list.php?msg=2');
+	//	exit;
+	//}
 }
 
 include('includes/header.php');
 ?>
-<link rel="stylesheet" type="text/css" href="../attrition/assets/sumoselect.min.css">
+<link rel="stylesheet" type="text/css" href="../hr/assets/sumoselect.min.css">
 
 <style>
 	.error{color:red !important;}
@@ -79,6 +82,11 @@ include('includes/header.php');
 	}
 	.SumoSelect .select-all {
 		height: 35px; 
+	}
+	p.SelectBox .search{
+		padding-left: 25px !important;
+	    font-size: 15px !important;
+	    font-weight: bolder;
 	}
 </style>
 <nav class="navbar navbar-expand-lg navbar-absolute fixed-top " id="navigation-example">
@@ -99,7 +107,7 @@ include('includes/header.php');
 <div class="content">
 <div class="content">
 <div class="container-fluid">
-  <input type="hidden" name="_token" value="<?php echo $token; ?>">
+  <input type="hidden" name="_token" value="<?php echo $token;?>">
   <input type="hidden" name="ab_engg_hiddn" id='ab_engg_hiddn' value="">
   <div class='row'>
   	<div class="col-md-12">
@@ -120,35 +128,34 @@ include('includes/header.php');
                 </div>
               </div>
             </div> -->
-            <div class="row">
-              <label class="col-sm-3 col-form-label">Activity Date & time</label>
-              <div class="col-sm-6">
-               <div class="form-group bmd-form-group has-danger">
-	            <input class="form-control datetimepicker" name='activity_date_time' value="" type="text" required="true"  aria-required="true" aria-invalid="true">
-	          </div>
-              </div>
-            </div>
+            
             <div class="row">
 			    <label class="col-sm-3 col-form-label">Activity</label>
 			    <div class="col-sm-6">
 				    <div class="form-group bmd-form-group has-danger">
 					    <select class="form-control selectpicker" data-style="btn btn-link" id="activity" title="Choose Activity" data-size="6" tabindex="-98" required name='activity' aria-invalid="true" onchange="loadengg()">
-					        <option value="Team Meeting">Team Meeting</option>
-							<option value="L2 Connect">L2 Connect</option>
-							<option value="TL/Manager connect">TL/Manager connect</option>
-							<option value="Skip level meeting">Skip level meeting</option>
-							<option value="One to One">One to One</option>
-							<option value="RAG">RAG</option>
-							<option value="Events/Fun activity">Events/Fun activity</option>
+					        <?php
+					        foreach($commonobj->getQry('SELECT activity_name from hr_activity_type') as $val){
+					        	echo "<option value='$val[activity_name]'>".$val['activity_name'].'</option>';
+					        }
+					        ?> 
 					    </select>
 					</div>
 				</div>
 			</div>
+			<div class="row">
+              <label class="col-sm-3 col-form-label">Activity Date & time</label>
+              <div class="col-sm-6">
+               <div class="form-group bmd-form-group has-danger">
+	            <input class="form-control datetimepicker" name='activity_date_time' value="" type="text" required="true"  aria-required="true" aria-invalid="true" style='padding-left: 30px;'>
+	          </div>
+              </div>
+            </div>
 	   		<div class="row">
 			    <label class="col-sm-3 col-form-label">Client</label>
 			    <div class="col-sm-6">
 				    <div class="form-group bmd-form-group has-danger">
-					    <select class="form-control selectpicker" data-style="btn btn-link" id="client" name="client"  data-size="7" tabindex="-98" title="Choose Client" onchange="loadengg()" required>
+					    <select class="form-control selectpicker" data-style="btn btn-link" id="client" name="client"  data-size="7" tabindex="-98" title="Choose Client" onchange="loadengg()" required multiple>
 					        <?php 
 					        	foreach ($clientArr as $key => $cname) {
 					        		echo "<option value='$cname'>".$cname."</option>";
@@ -164,7 +171,7 @@ include('includes/header.php');
 			    <label class="col-sm-3 col-form-label">Team</label>
 			    <div class="col-sm-6">
 				    <div class="form-group bmd-form-group has-danger">
-					    <select class="form-control selectpicker" data-style="btn btn-link" id="team" name='team' title="Choose Team" data-size="7" tabindex="-98"  onchange="loadengg1()" required>
+					    <select class="form-control selectpicker" data-style="btn btn-link" id="team" name='team' title="Choose Team" data-size="7" tabindex="-98"  onchange="loadengg1()" required> 
 					    </select>
 					</div>
 				</div>
@@ -275,7 +282,16 @@ include('includes/header.php');
 				                    <div class='row'>
 				                        <div class="col-sm-4">
 				                            <div class="form-group has-danger bmd-form-group">
-				                                <input class="form-control select_ttl" name="ID1_title" id="ID1_title" type="text" placeholder="Task Title" required>
+				                                <select class="form-control select_ttl" data-style="btn btn-link" id="ID1_title" name='ID1_title' required style='padding: 12px;'>
+											    	<option value=''>-- Task Type--</opiton>
+											    	<option value='Admin'>Admin</opiton>
+													<option value='IT'>IT</opiton>
+													<option value='Operations'>Operations</opiton>
+													<option value='Client'>Client</opiton>
+													<option value='HR'>HR</opiton>
+													<option value='Payroll'>Payroll</opiton>
+													<option value='Others'>Others</opiton>
+											    </select>
 				                            </div>
 				                        </div>
 				                        <div class="col-sm-4">
@@ -318,7 +334,7 @@ include('includes/header.php');
 				            <button type="button" id="btnDel" name="btnDel" class="btn btn-danger btn-sm float-left">
 				                Remove Last Section<div class="ripple-container"></div>
 				            </button>
-				            <button style='display: none;' type="button" id="btnDel1" name="btnDel1" class="btn btn-danger btn-sm float-left">
+							<button type="button" id="btnDel1" name="btnDel1" class="btn btn-danger btn-sm float-left" style="display:none;">
 				                Remove Last Section<div class="ripple-container"></div>
 				            </button>
 				            <button type="submit" class="btn btn-rose btn-sm">Save<div class="ripple-container"></div></button>
@@ -337,37 +353,53 @@ include('includes/header.php');
     </div>
    </div>
 <?php include('includes/footer.php'); ?>
- <script type="text/javascript" src="../attrition/assets/clone-path.js"></script>
-<script src="../attrition/assets/sumoselect.min.js" type="text/javascript"></script>
+ <script type="text/javascript" src="../hr/assets/clone-path.js"></script>
+<script src="../hr/assets/sumoselect.min.js" type="text/javascript"></script>
 <script>
+$('#issue').change(function(){
+	if(jQuery.inArray("None", $(this).val()) !== -1){
+		$('#savebtn').css('display','block')
+		$('#addbtn').css('display','none')
+	}else{
+		$('#savebtn').css('display','none')
+		$('#addbtn').css('display','block')
+
+	}
+});
 //function addSection(){
-$("#issue").change(function(e){
-	e.stopPropagation();
+$("#issue").change(function(){
+	//e.stopPropagation();
 	var selectedValue  = $(this).val();
 	var selectedCount = selectedValue.length;
 	var num  = $('.clonedInput').length;
+	/* console.log("num:"+num);
+	console.log("selectedCount:"+selectedCount); */
 	if(selectedCount > 0)
 	{
-		if(selectedCount == 1)
-		{
-			while(num > selectedCount)
-			{
-				//$('#btnDel').click();
-				$('#btnDel1').click();
-				num=num-1;
-			}
-		}else if(selectedCount > 1)
+		if(selectedCount > 1)
 		{
 			if(num <= selectedCount)
 			{
 				$('#btnAdd').click();
 			}else if(num > selectedCount){
+				var num  = $('.clonedInput').length;
 				while(num >= selectedCount)
+				//for(var num  = $('.clonedInput').length;num > selectedCount;num--)
 				{
-					//$('#btnDel').click();
 					$('#btnDel1').click();
 					num=num-1;
+					console.log("num:"+num);
 				}
+			}
+		}else
+		{
+			var num  = $('.clonedInput').length;
+			while(num > selectedCount)
+			//for(var num  = $('.clonedInput').length;num > selectedCount;num--)
+			{
+				$('#btnDel1').click();
+				num=num-1;
+				console.log("num:"+num);
 			}
 		}
 		
@@ -376,10 +408,11 @@ $("#issue").change(function(e){
 });
 //}
 $('.select1').SumoSelect({ selectAll: true,search: true ,placeholder: 'Select Here'});
+//$("#issue").SumoSelect({ okCancelInMulti: true,triggerChangeCombined: false});
 $('#TypeValidation').validate();
 $('.datetimepicker').datetimepicker({
 	format: 'L',
-	format: 'DD/MM/YYYY',
+	format: 'DD-MM-YYYY',
     icons: {
         time: "fa fa-clock-o",
         date: "fa fa-calendar",
@@ -404,14 +437,13 @@ function loadengg(){
 	 	$('.rag').css('display','none')
 	 	$('#savebtn').css('display','none')
 	 	$('#addbtn').css('display','block')
-
 	}
 	if(acitityname == 'One to One' || acitityname == 'RAG' || acitityname == 'Skip level meeting'){
 		$('.list').css('display','block')
 		$('.rag').css('display','block');
 		$('.issue_type').css('display','block')
 		$('.present').css('display','block')
-		console.log('hi');
+		//console.log('hi');
 
 	}else if(acitityname == 'Events/Fun activity'){
 		$('.present').css('display','none')
@@ -433,6 +465,7 @@ function loadengg(){
 	let client = $('#client').val();
 	let team = $('#team').val();
 	let client_team = client + '-' + team;
+	console.log(client_team)
 	dataqury = {'client_project':client_team,'comefrom':'teamname upload','activity':acitityname};
 	ajaxfun(dataqury , dropdown)
 }
