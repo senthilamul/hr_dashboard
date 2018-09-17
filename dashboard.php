@@ -1,7 +1,6 @@
 <?php 
 include('includes/config.php');
-//include('includes/session_check.php');
-//
+include('includes/session_check.php');
 if(isset($_POST['hr_name'])){
 	$trend_type = $_POST['trend_type'];
 	$trend_wise = $_POST['trend_wise'];
@@ -28,7 +27,7 @@ $Qry.= $hr_name == 'Overall' ?'' :" and create_by = '$hr_name'";
 $clientArr = $commonobj->arrayColumn($commonobj->getQry("SELECT distinct client from master_alcon_table where client<>'' order by client asc"),'','client');
 $overalltask = $commonobj->getQry("SELECT * from hr_task_activity_comments $Qry");
 $i=0;
-print_r($overalltask);
+
 foreach ($overalltask as $key => $ovrvalue) {
 	$taskcount[$ovrvalue['activity_id']] = $ovrvalue['status'];
 	$casewise[$ovrvalue['activity_id']] = $ovrvalue['client'];
