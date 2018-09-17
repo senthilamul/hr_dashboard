@@ -1,20 +1,66 @@
 <?php 
 include('includes/config.php');
 //include('includes/session_check.php');
+//
+if(isset($_POST['hr_name'])){
+	$trend_type = $_POST['trend_type'];
+	$trend_wise = $_POST['trend_wise'];
+	$hr_name = $_POST['hr_name'];
+}else{
+
+	$trend_type = empty($_POST['trend_type']) ? 'Week' : $_POST['trend_type'];
+	$weeknum = $commonobj->arrayColumn($commonobj->getQry("SELECT distinct week from hr_task_activity_comments  order by cmd_id desc limit 0 ,1 "),'','week');
+	$trend_wise = empty($_POST['trend_wise']) ? $weeknum[0] : $_POST['trend_wise']; 
+	$hr_name = $_POST['hr_name'] = 'Overall';
+}
+$hrlistArr= $commonobj->arrayColumn($commonobj->getQry("SELECT * from hr_list order by name asc"),'email','name');
+if($trend_type == 'Week'){
+	$selectField = 'week';
+}else if($trend_type == 'Month'){
+	$selectField = 'month';
+}else{
+	$selectField = 'qtr';
+}
+
+$Qry= empty($trend_type) ?'':" where  $selectField = '$trend_wise'";
+$Qry.= $hr_name == 'Overall' ?'' :" and create_by = '$hr_name'";
+
 $clientArr = $commonobj->arrayColumn($commonobj->getQry("SELECT distinct client from master_alcon_table where client<>'' order by client asc"),'','client');
- $overalltask = $commonobj->getQry("SELECT * from hr_task_activity_comments");
- foreach ($overalltask as $key => $ovrvalue) {
- 	$taskcount[$ovrvalue['activity_id']] = $ovrvalue['status'];
- }
+$overalltask = $commonobj->getQry("SELECT * from hr_task_activity_comments $Qry");
+$i=0;
+print_r($overalltask);
+foreach ($overalltask as $key => $ovrvalue) {
+	$taskcount[$ovrvalue['activity_id']] = $ovrvalue['status'];
+	$casewise[$ovrvalue['activity_id']] = $ovrvalue['client'];
+	$task_typeAr[$ovrvalue['activity_id']] = $ovrvalue['task_type'];
+	$activity_typeAr[$ovrvalue['activity_id']] = $ovrvalue['activity_type'];
+$i++;
+}
+$j =0;
+
 $countArr = array_count_values($taskcount);
 
+$projectwiseArr = converToJsonFormat($casewise , 'project');
+$task_type = converToJsonFormat($task_typeAr , 'task');
+$activity_type = converToJsonFormat($activity_typeAr , 'activity');
+
+function converToJsonFormat($array , $keypare)
+{
+	$j=0;
+	foreach (array_count_values($array) as $key => $sumval) {
+		$returnArr[$j][$keypare] = $key;
+		$returnArr[$j]['value'] = $sumval;
+		$j++; 
+	}
+	return $returnArr;
+}
 include('includes/header.php'); 
 ?>
 <script src="https://www.amcharts.com/lib/3/amcharts.js"></script>
-<script src="https://www.amcharts.com/lib/3/serial.js"></script>
+<script src="https://www.amcharts.com/lib/3/pie.js"></script>
 <script src="https://www.amcharts.com/lib/3/plugins/export/export.min.js"></script>
 <link rel="stylesheet" href="https://www.amcharts.com/lib/3/plugins/export/export.css" type="text/css" media="all" />
-<script src="https://www.amcharts.com/lib/3/themes/light.js"></script>
+<script src="https://www.amcharts.com/lib/3/themes/dark.js"></script>
 <!-- Navbar -->
 	<nav class="navbar navbar-expand-lg navbar-absolute fixed-top " id="navigation-example">
 	   <div class="container-fluid">
@@ -36,22 +82,28 @@ include('includes/header.php');
         <form action="dashboard.php" method="post" style="text-align:right;margin-bottom:0px;">
             <input type="hidden" name="_token" value="<?php echo $token; ?>">
             <select class="selectpicker" name="hr_name" id="hr_name" data-size="5" data-style="btn btn-info btn-round" title="HR Name">
-                <option value='Overall'>Overall HR</option>
-                <?php foreach($commonobj->arrayColumn($commonobj->getQry("SELECT email,name from hr_list order by name asc"),'email','name') as $hr_name){ 
-                    $selected = ($month == $sel_month)?"Selected":""; ?>
-                <option value="<?=$hr_name?>" <?=$selected?>><?=ucwords($hr_name)?></option>
+                <?php
+                	$select= $hr_name=='Overall'?'selected':'';
+                	echo "<option value='Overall' $select>Overall HR</option>";
+                 foreach($commonobj->arrayColumn($commonobj->getQry("SELECT email,name from hr_list order by name asc"),'email','name') as $email => $hr_names){ 
+                    $selected = ($hr_name == $email)?"selected":""; ?>
+                <option value="<?=$email?>" <?=$selected?>><?=ucwords($hr_names)?></option>
                 <?php } ?>
             </select>
-            <select class="selectpicker" onchange="getMonth(this.value)" name="project" id="project" data-size="5" data-style="btn btn-info btn-round" title="Project" required>
-                <?php
-                	echo "<option value='Overall'>Overall Project</option>";
-                	foreach ($clientArr as $key => $cname) {
-		        		echo "<option value='$cname'>".$cname."</option>";
-		        	}
-                ?>
+            <select class="selectpicker" onchange="getMonth(this.value)" name="trend_type" id="trend_type" data-size="5" data-style="btn btn-info btn-round" title="Trend" required>
+                <option value="Week" <?=$trend_type=='Week'?'selected':''?> > Week</option>
+                <option value="Month" <?=$trend_type=='Month'?'selected':''?>>Month</option>
+                <option value="Quarterly" <?=$trend_type=='Quarterly'?'selected':''?>>Quarterly</option>
             </select>
-            <select class="selectpicker" name="team" id="team" data-size="5" data-style="btn btn-info btn-round" title="Team">
-                <option value='Overall'>Overall Team</option>
+            <select class="selectpicker" name="trend_wise" id="trend_wise" data-size="5" data-style="btn btn-info btn-round" title="Team">
+            <?php 
+            
+			$teamnameArr = $commonobj->arrayColumn($commonobj->getQry("SELECT distinct $selectField from hr_task_activity_comments  order by cmd_id desc"),'',$selectField);
+			foreach($teamnameArr as $key => $value) {
+				$selected= $trend_wise == $value ? 'selected' :'';
+				echo "<option value='$value' $selected>" . $value . "</option>";
+			}
+            ?>
             </select>
             <button type="submit" class="btn btn-fill btn-success btn-round">Submit</button>
 	    	<div class="row">
@@ -121,18 +173,30 @@ include('includes/header.php');
 			    </div>
 			  </div>
 			</div>
-			<!-- <div class="row">
-		      <div class="col-md-6">
-		      <div class="card ">
-		        <div class="card-header ">
-		          <h4 class="card-title">Activity / Hr Mapping / Add Hr</h4>
-		        </div>
-		        <div class="card-body ">
-		          <div class='' id='chartdiv'></div>
+			<div class="row">
+			   <div class="col-md-12">
+		        <div class="card">
+		          <div class="card-header card-header-icon card-header-rose">
+		          </div>
+		          <div class="card-body">
+		          	<div class="row">
+		          		<div class='col-md-4'>
+		          		<h5>Project Wise - <?=$hr_name?></h5>
+		          			<div id="chartdiv"></div>
+		          		</div>
+		          		<div class='col-md-4'>
+		          			<h5>Activity Type - <?=$hr_name?></h5>
+		          			<div id="chartdiv2"></div>
+		          		</div>
+		          		<div class='col-md-4'>
+		          			<h5>Task Type - <?=$hr_name?></h5>
+		          			<div id="chartdiv1"></div>
+		          		</div>
+		          	</div>
+		          </div>
 		        </div>
 		      </div>
-		    </div>
-		  </div> -->
+			</div>
         </form>
     
 <?php include("includes/footer.php"); ?>
@@ -151,6 +215,10 @@ include('includes/header.php');
 	width: 100%;
    height: 350px;
 }
+#chartdiv ,  #chartdiv1 ,#chartdiv2{
+ /*  width: 100%; */
+  height: 250px;
+}	
 .table>tbody>tr>td, .table>tbody>tr>th, .table>tfoot>tr>td, .table>tfoot>tr>th, .table>thead>tr>td, .table>thead>tr>th
 {
 	padding:1px 1px;
@@ -198,183 +266,73 @@ $(document).ready( function () {
         });
     });
 } );
-function getMonth(client){
+function getMonth(type){
 	$.ajax({
 		url: 'ajax.php',
 		type: 'POST',
-		data: {'projectArr':client,'ComeFrom':'project_activity'},
+		data: {'typeTrend':type,'ComeFrom':'Select Trend'},
 		success: function(output) {
+			console.log(output)
 			var obj = jQuery.parseJSON( output);
-			obj.unshift("<option value='Overall'>Overall Team</option>");
-			$("#team").html(obj);
-			$("#team").selectpicker('refresh');
+			//obj.unshift("<option value='Overall'>Overall Team</option>");
+			$("#trend_wise").html(obj);
+			$("#trend_wise").selectpicker('refresh');
 		}
 	}); 
 }
-var chart4 = AmCharts.makeChart("chartdiv", {
-		"theme": "light",
-		"type": "serial",
-		"startDuration": 2,
-		"dataProvider": [
-				{
-			"months": "Apr-18",
-			"hc": 21.2,
-			"retention": 14.5,
-		},
-				{
-			"months": "May-18",
-			"hc": 23,
-			"retention": 15.9,
-		},
-				{
-			"months": "Jun-18",
-			"hc": 25.1,
-			"retention": 19.5,
-		},
-				{
-			"months": "Jul-18",
-			"hc": 26.1,
-			"retention": 18.3,
-		},
-				],
-		"synchronizeGrid":true,
-		"valueAxes": [{
-			"id": "v1",
-			"axisColor": "#FCD202",
-			"axisThickness": 2,
-			"axisAlpha": 0.15,
-			"position": "left",
-			"unit":"%",
-			"title": "Overall YTD %",
-		  }, {
-			"id": "v2",
-			"axisColor": "#FCD202",
-			"axisThickness": 2,
-			"axisAlpha": 0.15,
-			"position": "right",
-			"unit":"%",
-			"title": "Voluntary YTD %",
-			"synchronizationMultiplier": 0.25
-		  },],
+$('#RegisterValidation').validate();
+	
+	$('.alert').fadeOut(3000);
+	var chart = AmCharts.makeChart( "chartdiv", {
+	  "type": "pie",
+	  "theme": "light",
+	  "dataProvider":<?php echo json_encode($projectwiseArr,true)?>,
+	  "valueField": "value",
+	  "titleField": "project",
+	  "outlineAlpha": 0.1,
+	  "labelRadius": -35,
+  	  "labelText": "[[title]]<br>[[[value]]]-[[percents]]%",
+	  "depth3D": 15,
+	  "balloonText": "[[title]]<br><span style='font-size:10px'><b>[[value]]</b> ([[percents]]%)</span>",
+	  "angle": 30,
+	  "export": {
+	    "enabled": true
+	  },
+	  "hideCredits":true,
+	} );
 
-		"graphs": [{
-			"valueAxis": "v1",
-			"balloonText": "Overall YTD % ([[category]]): <b>[[value]]%</b>",
-			"lineThickness": 2,
-			"bullet": "diamond",
-			"bulletBorderAlpha": 1,
-			"bulletBorderColor": "#fff",
-			"valueField": "hc",
-			"lineColor": "#8d1cc6",
-			"type": "smoothedLine",
-		  }, {
-			"valueAxis": "v2",
-			"balloonText": "Voluntary YTD % ([[category]]): <b>[[value]]%</b>",
-			"lineThickness": 2,
-			"bullet": "diamond",
-			"bulletBorderAlpha": 1,
-			"bulletBorderColor": "#fff",
-			"valueField": "retention",
-			"type": "smoothedLine",
-		  }],
-		"chartCursor": {
-	        "categoryBalloonDateFormat": "YYYY",
-	        "cursorAlpha": 0,
-	        "valueLineEnabled":true,
-	        "valueLineBalloonEnabled":true,
-	        "valueLineAlpha":0.5,
-	        "fullWidth":true
-	    },
-		"categoryField": "months",
-		"categoryAxis": {
-			"gridPosition": "start",
-			"labelRotation": 90
-		},
-		"export": {
-			"enabled": false
-		 }
-	});
-	var chart4 = AmCharts.makeChart("chartdiv1", {
-		"theme": "light",
-		"type": "serial",
-		"startDuration": 2,
-		"dataProvider": [
-				{
-			"months": "Apr-18",
-			"hc": 1.7,
-			"retention": 1.2,
-		},
-				{
-			"months": "May-18",
-			"hc": 2.1,
-			"retention": 1.5,
-		},
-				{
-			"months": "Jun-18",
-			"hc": 2.4,
-			"retention": 2.2,
-		},
-				{
-			"months": "Jul-18",
-			"hc": 2.4,
-			"retention": 1.2,
-		},
-				],
-		"synchronizeGrid":true,
-		"valueAxes": [{
-			"id": "v1",
-			"axisColor": "#FCD202",
-			"axisThickness": 2,
-			"axisAlpha": 0.15,
-			"position": "left",
-			"unit":"%",
-			"title": "Monthly Attr % - Overall",
-		  }, {
-			"id": "v2",
-			"axisColor": "#FCD202",
-			"axisThickness": 2,
-			"axisAlpha": 0.15,
-			"position": "right",
-			"unit":"%",
-			"title": "Monthly Attr % - Voluntary",
-			"synchronizationMultiplier": 0.25
-		  },],
-		"graphs": [{
-			"valueAxis": "v1",
-			"balloonText": "Monthly Attr Overall % ([[category]]): <b>[[value]]%</b>",
-			"lineThickness": 2,
-			"bullet": "diamond",
-			"bulletBorderAlpha": 1,
-			"bulletBorderColor": "#fff",
-			"valueField": "hc",
-			"lineColor": "#8d1cc6",
-			"type": "smoothedLine",
-		  }, {
-			"valueAxis": "v2",
-			"balloonText": "Monthly Attr voluntary % ([[category]]): <b>[[value]]%</b>",
-			"lineThickness": 2,
-			"bullet": "diamond",
-			"bulletBorderAlpha": 1,
-			"bulletBorderColor": "#fff",
-			"valueField": "retention",
-			"type": "smoothedLine",
-		  }],
-		"chartCursor": {
-	        "categoryBalloonDateFormat": "YYYY",
-	        "cursorAlpha": 0,
-	        "valueLineEnabled":true,
-	        "valueLineBalloonEnabled":true,
-	        "valueLineAlpha":0.5,
-	        "fullWidth":true
-	    },
-		"categoryField": "months",
-		"categoryAxis": {
-			"gridPosition": "start",
-			"labelRotation": 90
-		},
-		"export": {
-			"enabled": false
-		 }
-	});
-
+	var chart = AmCharts.makeChart( "chartdiv1", {
+	  "type": "pie",
+	  "theme": "light",
+	  "dataProvider":<?php echo json_encode($task_type,true)?>,
+	  "valueField": "value",
+	  "titleField": "task",
+	  "outlineAlpha": 0.1,
+	  "labelRadius": -35,
+  	  "labelText": "[[title]]<br>[[[value]]]-[[percents]]%",
+	  "depth3D": 15,
+	  "balloonText": "[[title]]<br><span style='font-size:10px'><b>[[value]]</b> ([[percents]]%)</span>",
+	  "angle": 30,
+	  "export": {
+	    "enabled": true
+	  },
+	  "hideCredits":true,
+	} );
+	var chart = AmCharts.makeChart( "chartdiv2", {
+	  "type": "pie",
+	  "theme": "light",
+	  "dataProvider":<?php echo json_encode($activity_type,true)?>,
+	  "valueField": "value",
+	  "titleField": "activity",
+	  "outlineAlpha": 0.1,
+	  "labelRadius": -35,
+  	  "labelText": "[[title]]<br>[[[value]]]-[[percents]]%",
+	  "depth3D": 15,
+	  "balloonText": "[[title]]<br><span style='font-size:10px'><b>[[value]]</b> ([[percents]]%)</span>",
+	  "angle": 30,
+	  "export": {
+	    "enabled": true
+	  },
+	  "hideCredits":true,
+	} );
 </script>
