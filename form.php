@@ -2,7 +2,7 @@
 include('includes/config.php');
 // include('includes/session_check.php');
 $clientArr = $commonobj->arrayColumn($commonobj->getQry("SELECT distinct client from master_alcon_table where month = '$month' and client<>'' order by client asc"),'','client');
-echo "SELECT distinct client from master_alcon_table where month = '$month' and client<>'' order by client asc";
+//echo "SELECT distinct client from master_alcon_table where month = '$month' and client<>'' order by client asc";
 if(isset($_POST['activity_date_time'])){
 	extract($_POST);
 	if($activity == 'L2 Connect' || $activity == 'TL/Manager connect' || $activity == 'Team Meeting'){
@@ -31,13 +31,20 @@ if(isset($_POST['activity_date_time'])){
 	    $cr_month       = date("M", strtotime($cr_date))." ".$cr_addyear;
 	    $cr_week        ="Wk " . date("W", strtotime($cr_date))." ".$cr_addyear;
 	
-		$insertQry = $conn->prepare("INSERT INTO `hr_task`(`activity_date_time`, `activity_type`, `client`, `team`, `present_engg`, `absent_engg`, `category`, `f_week`, `f_month`, `f_qtr` , command, `created_by`, `create_at`, `update_at`) VALUES ( ?,?,?,?,?,?,?,?,?,?,?,?,? ,?)");
+		$insertQry = $conn->prepare("INSERT INTO `hr_task`(`activity_date_time`, `activity_type`, `rag_status`,`client`, `team`, `present_engg`, `absent_engg`, `category`, `f_week`, `f_month`, `f_qtr` , command, `created_by`, `create_at`, `update_at`) VALUES ( ?,?,?,?,?,?,?,?,?,?,?,?,?,? ,?)");
 		$absentname= count($absentArr) > 0 ? implode(',',$absentArr) :'';
 		$presentname = count($pr_engg) > 0 ? implode(',',$pr_engg): '';
 
-		$insertstatus = $insertQry->execute(array( $date , $activity , $client , $team , $presentname ,$absentname,implode(',',$issue), $cr_week ,  $cr_month , $cr_qtr , $cmd, $username , $dbdatetime , $dbdatetime ));
-
-			
+		if($activity == 'RAG' || $activity == 'One to One' || $activity == 'Skip level meeting'){
+			$rag = $rag;
+			if($activity == 'One to One'){
+				$status = 'Closed';
+			}
+		}else{
+			$rag = '';
+		}
+		$insertstatus = $insertQry->execute(array( $date , $activity , $rag,$client , $team , $presentname ,$absentname,implode(',',$issue), $cr_week ,  $cr_month , $cr_qtr , $cmd, $username , $dbdatetime , $dbdatetime ));
+		
 		$taskID = $conn->lastInsertId();
 		
 		//if($activity != 'RAG' || $activity != 'Events/Fun activity'){
@@ -58,18 +65,18 @@ if(isset($_POST['activity_date_time'])){
 			$raginsert = $conn->prepare("UPDATE master_alcon_table set `rag_status` = '$rag', `created_by`='$username',`create_at`='$dbdatetime',`update_at`='$dbdatetime' where month='$month' and emp_name in ('".implode("','",$pr_engg)."')");
 			$raginsert->execute();
 		}
-	//if($insertstatus){
-	//	header('location:activity_list.php?msg=1');
-	//	exit;
-	//}else{
-	//	header('location:activity_list.php?msg=2');
-	//	exit;
-	//}
+	if($insertstatus){
+		header('location:activity_list.php?msg=1');
+		exit;
+	}else{
+		header('location:activity_list.php?msg=2');
+		exit;
+	}
 }
 
 include('includes/header.php');
 ?>
-<link rel="stylesheet" type="text/css" href="../hr/assets/sumoselect.min.css">
+<link rel="stylesheet" type="text/css" href="../attrition/assets/sumoselect.min.css">
 
 <style>
 	.error{color:red !important;}
@@ -114,21 +121,7 @@ include('includes/header.php');
       <form id="TypeValidation" autocomplete="off" class="form-horizontal" action="" method="POST" novalidate="novalidate">
       <input type="hidden" id='hidden_id' name="hidden_id" value="1">
         <div class="card">
-          <!-- <div class="card-header card-header-rose card-header-text">
-            <div class="card-icon">
-              <i class="material-icons">border_color</i>
-            </div>
-          </div> -->
           <div class="card-body">
-           <!--  <div class="row">
-              <label class="col-sm-3 col-form-label">Activity Title</label>
-              <div class="col-sm-6">
-                <div class="form-group bmd-form-group has-danger">
-                  <input class="form-control" name="title" required="true" aria-required="true" aria-invalid="true" type="text">
-                </div>
-              </div>
-            </div> -->
-            
             <div class="row">
 			    <label class="col-sm-3 col-form-label">Activity</label>
 			    <div class="col-sm-6">
@@ -136,6 +129,7 @@ include('includes/header.php');
 					    <select class="form-control selectpicker" data-style="btn btn-link" id="activity" title="Choose Activity" data-size="6" tabindex="-98" required name='activity' aria-invalid="true" onchange="loadengg()">
 					        <?php
 					        foreach($commonobj->getQry('SELECT activity_name from hr_activity_type') as $val){
+					        	if($val['activity_name'] != 'RAG')
 					        	echo "<option value='$val[activity_name]'>".$val['activity_name'].'</option>';
 					        }
 					        ?> 
@@ -151,11 +145,22 @@ include('includes/header.php');
 	          </div>
               </div>
             </div>
+            <div class="present">
+				<div class="row">
+				    <label class="col-sm-3 col-form-label">Present list</label>
+				    <div class="col-sm-6">
+					    <div class="form-group bmd-form-group has-danger">
+						    <select class="form-control select1" data-style="btn btn-link" id="engg" name='pr_engg[]' title="Choose Engineer" data-size="7" tabindex="-98" multiple>
+						    </select>
+						</div>
+					</div>
+				</div>
+			</div>
 	   		<div class="row">
 			    <label class="col-sm-3 col-form-label">Client</label>
 			    <div class="col-sm-6">
 				    <div class="form-group bmd-form-group has-danger">
-					    <select class="form-control selectpicker" data-style="btn btn-link" id="client" name="client"  data-size="7" tabindex="-98" title="Choose Client" onchange="loadengg()" required multiple>
+					    <select class="form-control selectpicker" data-style="btn btn-link" id="client" name="client"  data-size="7" tabindex="-98" title="Choose Client" onchange="loadengg()" required>
 					        <?php 
 					        	foreach ($clientArr as $key => $cname) {
 					        		echo "<option value='$cname'>".$cname."</option>";
@@ -176,17 +181,7 @@ include('includes/header.php');
 					</div>
 				</div>
 			</div>
-			<div class="present">
-				<div class="row">
-				    <label class="col-sm-3 col-form-label">Present list</label>
-				    <div class="col-sm-6">
-					    <div class="form-group bmd-form-group has-danger">
-						    <select class="form-control select1" data-style="btn btn-link" id="engg" name='pr_engg[]' title="Choose Engineer" data-size="7" tabindex="-98" multiple>
-						    </select>
-						</div>
-					</div>
-				</div>
-			</div>
+			
 			<div style='display: none'>
 				<div class="row">
 				    <label class="col-sm-3 col-form-label">Absent list</label>
@@ -235,7 +230,7 @@ include('includes/header.php');
 		            </div>
 				</div>
 			</div>
-			<div class="issue_type">
+			<!-- <div class="issue_type">
 				<div class="row">
 				    <label class="col-sm-3 col-form-label">Type fo issue</label>
 				    <div class="col-sm-6">
@@ -253,16 +248,16 @@ include('includes/header.php');
 						</div>
 					</div>
 				</div>
-			</div>
+			</div> -->
 				
-			<div class="row">
+			<!-- <div class="row">
 			    <label class="col-sm-3 col-form-label">Comments</label>
 			    <div class="col-sm-6">
 				    <div class="form-group bmd-form-group has-danger">
 					    <textarea class="form-control" id="comments" rows="3" name='cmd'></textarea>
 					</div>
 				</div>
-			</div>
+			</div> -->
 			</div>
 			<div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" style="display: none;" aria-hidden="true">
 				<div class="modal-dialog  modal-lg">
@@ -275,7 +270,6 @@ include('includes/header.php');
 				        </div>
 				        <div class="modal-body">
 				            <div id="entry1" class="clonedInput">
-
 				                <h6 id="reference" name="reference" class="heading-reference">Task #1</h6>
 				                <hr>
 				                <fieldset>
@@ -353,59 +347,59 @@ include('includes/header.php');
     </div>
    </div>
 <?php include('includes/footer.php'); ?>
- <script type="text/javascript" src="../hr/assets/clone-path.js"></script>
-<script src="../hr/assets/sumoselect.min.js" type="text/javascript"></script>
+ <script type="text/javascript" src="../attrition/assets/clone-path.js"></script>
+<script src="../attrition/assets/sumoselect.min.js" type="text/javascript"></script>
 <script>
-$('#issue').change(function(){
-	if(jQuery.inArray("None", $(this).val()) !== -1){
-		$('#savebtn').css('display','block')
-		$('#addbtn').css('display','none')
-	}else{
-		$('#savebtn').css('display','none')
-		$('#addbtn').css('display','block')
+// $('#issue').change(function(){
+// 	if(jQuery.inArray("None", $(this).val()) !== -1){
+// 		$('#savebtn').css('display','block')
+// 		$('#addbtn').css('display','none')
+// 	}else{
+// 		$('#savebtn').css('display','none')
+// 		$('#addbtn').css('display','block')
 
-	}
-});
+// 	}
+// });
 //function addSection(){
-$("#issue").change(function(){
-	//e.stopPropagation();
-	var selectedValue  = $(this).val();
-	var selectedCount = selectedValue.length;
-	var num  = $('.clonedInput').length;
-	/* console.log("num:"+num);
-	console.log("selectedCount:"+selectedCount); */
-	if(selectedCount > 0)
-	{
-		if(selectedCount > 1)
-		{
-			if(num <= selectedCount)
-			{
-				$('#btnAdd').click();
-			}else if(num > selectedCount){
-				var num  = $('.clonedInput').length;
-				while(num >= selectedCount)
-				//for(var num  = $('.clonedInput').length;num > selectedCount;num--)
-				{
-					$('#btnDel1').click();
-					num=num-1;
-					console.log("num:"+num);
-				}
-			}
-		}else
-		{
-			var num  = $('.clonedInput').length;
-			while(num > selectedCount)
-			//for(var num  = $('.clonedInput').length;num > selectedCount;num--)
-			{
-				$('#btnDel1').click();
-				num=num-1;
-				console.log("num:"+num);
-			}
-		}
+// $("#issue").change(function(){
+// 	//e.stopPropagation();
+// 	var selectedValue  = $(this).val();
+// 	var selectedCount = selectedValue.length;
+// 	var num  = $('.clonedInput').length;
+// 	/* console.log("num:"+num);
+// 	console.log("selectedCount:"+selectedCount); */
+// 	if(selectedCount > 0)
+// 	{
+// 		if(selectedCount > 1)
+// 		{
+// 			if(num <= selectedCount)
+// 			{
+// 				$('#btnAdd').click();
+// 			}else if(num > selectedCount){
+// 				var num  = $('.clonedInput').length;
+// 				while(num >= selectedCount)
+// 				//for(var num  = $('.clonedInput').length;num > selectedCount;num--)
+// 				{
+// 					$('#btnDel1').click();
+// 					num=num-1;
+// 					console.log("num:"+num);
+// 				}
+// 			}
+// 		}else
+// 		{
+// 			var num  = $('.clonedInput').length;
+// 			while(num > selectedCount)
+// 			//for(var num  = $('.clonedInput').length;num > selectedCount;num--)
+// 			{
+// 				$('#btnDel1').click();
+// 				num=num-1;
+// 				console.log("num:"+num);
+// 			}
+// 		}
 		
-	}
+// 	}
 	
-});
+// });
 //}
 $('.select1').SumoSelect({ selectAll: true,search: true ,placeholder: 'Select Here'});
 //$("#issue").SumoSelect({ okCancelInMulti: true,triggerChangeCombined: false});
@@ -443,7 +437,6 @@ function loadengg(){
 		$('.rag').css('display','block');
 		$('.issue_type').css('display','block')
 		$('.present').css('display','block')
-		//console.log('hi');
 
 	}else if(acitityname == 'Events/Fun activity'){
 		$('.present').css('display','none')
@@ -458,7 +451,11 @@ function loadengg(){
 		$('.issue_type').css('display','block')
 		$('#savebtn').css('display','none')
 	 	$('#addbtn').css('display','block')
-
+	}
+	if(acitityname == 'Team Meeting'){
+		$('.present').css('display','none')
+	}else{
+		$('.present').css('display','block')
 	}
 
 	$('#engg').selectpicker('refresh').html('').selectpicker('refresh')
